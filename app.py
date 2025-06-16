@@ -8,169 +8,92 @@ import os
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 
-# Download NLTK resources
-nltk.download('stopwords')
-nltk.download('wordnet')
-nltk.download('punkt')
+# 1. Tentukan direktori kerja
+current_dir = os.getcwd()
 
-# Dapatkan path direktori saat ini
-current_dir = os.path.dirname(os.path.abspath(__file__))
+# 2. Cache unduhan NLTK
+@st.cache_resource
+def download_nltk_resources():
+    nltk.download('stopwords')
+    nltk.download('wordnet')
+    nltk.download('punkt')
+    return True
 
-# Fungsi preprocessing
+download_nltk_resources()
+
+# 3. Inisialisasi session_state
+if 'models_loaded' not in st.session_state:
+    st.session_state.models_loaded = False
+
+# 4. Fungsi preprocessing
 def preprocess_text(text):
-    # Load preprocessing params
     stop_words = st.session_state.preprocess_params['stopwords']
     lemmatizer = st.session_state.preprocess_params['lemmatizer']
-    
-    # Lowercasing
     text = text.lower()
-    # Remove special characters and numbers
     text = re.sub(r'[^a-zA-Z\s]', '', text)
-    # Tokenization
     tokens = nltk.word_tokenize(text)
-    # Stopword removal and lemmatization
-    tokens = [lemmatizer.lemmatize(word) for word in tokens if word not in stop_words]
+    tokens = [lemmatizer.lemmatize(w) for w in tokens if w not in stop_words]
     return ' '.join(tokens)
 
-# Load models
+# 5. Load semua model & params
 def load_models():
-    if 'models_loaded' not in st.session_state:
-        with st.spinner('Memuat model...'):
-            try:
-                print("Loading models...")
-                
-                # Load preprocessing params
-                preprocess_path = os.path.join(current_dir, 'preprocess_params.pkl')
-                if not os.path.exists(preprocess_path):
-                    raise FileNotFoundError(f"File preprocess_params.pkl not found at {preprocess_path}")
-                st.session_state.preprocess_params = joblib.load(preprocess_path)
-                
-                # Load Logistic Regression model
-                model_path = os.path.join(current_dir, 'logreg_model.pkl')
-                if not os.path.exists(model_path):
-                    raise FileNotFoundError(f"File logreg_model.pkl not found at {model_path}")
-                st.session_state.logreg_model = joblib.load(model_path)
-                
-                # Load vectorizer
-                vectorizer_path = os.path.join(current_dir, 'tfidf_vectorizer.pkl')
-                if not os.path.exists(vectorizer_path):
-                    raise FileNotFoundError(f"File tfidf_vectorizer.pkl not found at {vectorizer_path}")
-                st.session_state.vectorizer = joblib.load(vectorizer_path)
-                
-                # Load label encoder
-                label_path = os.path.join(current_dir, 'label_encoder.pkl')
-                if not os.path.exists(label_path):
-                    raise FileNotFoundError(f"File label_encoder.pkl not found at {label_path}")
-                st.session_state.label_encoder = joblib.load(label_path)
-                
-                st.session_state.models_loaded = True
-                print("All models loaded successfully!")
-                
-            except Exception as e:
-                st.error(f"Gagal memuat model: {str(e)}")
-                st.stop()
+    if not st.session_state.models_loaded:
+        with st.spinner("Memuat model..."):
+            # Paths
+            p1 = os.path.join(current_dir, 'preprocess_params.pkl')
+            p2 = os.path.join(current_dir, 'logreg_model.pkl')
+            p3 = os.path.join(current_dir, 'tfidf_vectorizer.pkl')
+            p4 = os.path.join(current_dir, 'label_encoder.pkl')
+            # Cek keberadaan
+            for p in (p1, p2, p3, p4):
+                if not os.path.exists(p):
+                    st.error(f"File tidak ditemukan: {os.path.basename(p)}")
+                    st.stop()
+            # Load
+            st.session_state.preprocess_params = joblib.load(p1)
+            st.session_state.logreg_model      = joblib.load(p2)
+            st.session_state.vectorizer        = joblib.load(p3)
+            st.session_state.label_encoder     = joblib.load(p4)
+            st.session_state.models_loaded     = True
 
-# Konfigurasi halaman
-st.set_page_config(
-    page_title="News Category Classifier",
-    page_icon="📰",
-    layout="centered"
-)
-
-# UI Header
-st.title("📰 News Category Classifier")
-st.markdown("""
-Klasifikasi kategori berita menggunakan model Logistic Regression. 
-Model dapat memprediksi 5 kategori: POLITICS, ENTERTAINMENT, SPORTS, STYLE & BEAUTY, BUSINESS.
-""")
-
-# Input teks
-news_text = st.text_area(
-    label="Masukkan teks berita:",
-    placeholder="Contoh: The president announced new economic policies today...",
-    height=150
-)
-
-# Tombol prediksi
-predict_btn = st.button("Prediksi Kategori")
-
-# Load models
 load_models()
 
-# Fungsi prediksi
-def predict_category(text):
-    # Preprocess text
-    cleaned_text = preprocess_text(text)
-    
-    # Transform text to TF-IDF
-    text_vec = st.session_state.vectorizer.transform([cleaned_text])
-    
-    # Predict
-    prediction = st.session_state.logreg_model.predict(text_vec)[0]
-    probabilities = st.session_state.logreg_model.predict_proba(text_vec)[0]
-    
-    return prediction, probabilities
+# === UI ===
+st.set_page_config(page_title="News Category Classifier", page_icon="📰", layout="centered")
+st.title("📰 News Category Classifier")
+st.markdown("Klasifikasi kategori berita: POLITICS, ENTERTAINMENT, SPORTS, STYLE & BEAUTY, BUSINESS.")
 
-# Handle prediksi
-if predict_btn and news_text.strip():
-    with st.spinner('Memprediksi kategori...'):
-        try:
-            # Get prediction
-            prediction, probabilities = predict_category(news_text)
-            
-            # Tampilkan hasil utama
-            st.subheader("Hasil Klasifikasi")
-            st.success(f"Kategori prediksi: **{prediction}**")
-            
-            # Tampilkan probabilitas
-            prob_df = pd.DataFrame({
-                'Kategori': [st.session_state.label_encoder['id2label'][i] for i in range(len(probabilities))],
-                'Probabilitas': probabilities
-            })
-            prob_df = prob_df.sort_values('Probabilitas', ascending=False)
-            
-            # Tampilkan grafik
-            st.subheader("Probabilitas Kategori")
-            st.bar_chart(
-                prob_df.set_index('Kategori'),
-                height=400,
-                use_container_width=True
-            )
-            
-            # Tampilkan detail probabilitas
-            st.subheader("Detail Probabilitas")
-            for i, prob in enumerate(probabilities):
-                category = st.session_state.label_encoder['id2label'][i]
-                progress = int(prob * 100)
-                col1, col2 = st.columns([2, 5])
-                with col1:
-                    st.markdown(f"**{category}**")
-                with col2:
-                    st.progress(progress, f"{progress}%")
-            
-        except Exception as e:
-            st.error(f"Terjadi kesalahan saat prediksi: {str(e)}")
-    
-elif predict_btn:
-    st.warning("Silakan masukkan teks berita terlebih dahulu")
+news_text = st.text_area("Masukkan teks berita:", height=150)
+if st.button("Prediksi Kategori"):
+    if not news_text.strip():
+        st.warning("Silakan masukkan teks berita terlebih dahulu")
+    else:
+        with st.spinner("Memprediksi..."):
+            try:
+                clean = preprocess_text(news_text)
+                vec   = st.session_state.vectorizer.transform([clean])
+                pred  = st.session_state.logreg_model.predict(vec)[0]
+                probs = st.session_state.logreg_model.predict_proba(vec)[0]
 
-# Tambahkan penjelasan model
-st.markdown("---")
-st.subheader("Tentang Model")
-st.markdown("""
-**Logistic Regression:**
-- Akurasi: 86%
-- Waktu prediksi: Sangat cepat (ms)
-- Cocok untuk penggunaan real-time
+                # Tampilkan hasil
+                st.subheader("Hasil Klasifikasi")
+                st.success(f"Kategori: **{pred}**")
 
-Dataset: [News Category Dataset (Kaggle)](https://www.kaggle.com/datasets/rmisra/news-category-dataset)
-""")
+                # DataFrame probabilitas
+                labels = st.session_state.label_encoder.classes_
+                prob_df = pd.DataFrame({
+                    'Kategori': labels,
+                    'Probabilitas': probs
+                }).sort_values('Probabilitas', ascending=False)
 
-# Informasi tambahan
-st.markdown("---")
-st.info("""
-**Catatan:**
-- Aplikasi ini menggunakan model Logistic Regression yang dioptimalkan
-- Waktu pemuatan model hanya beberapa detik
-- Hasil prediksi muncul secara instan setelah teks dimasukkan
-""")
+                st.subheader("Probabilitas per Kategori")
+                st.bar_chart(prob_df.set_index('Kategori'), height=300)
+
+                st.subheader("Detail Probabilitas")
+                for cat, p in zip(labels, probs):
+                    pct = int(p * 100)
+                    c1, c2 = st.columns([2, 5])
+                    with c1: st.markdown(f"**{cat}**")
+                    with c2: st.progress(pct, f"{pct}%")
+            except Exception as e:
+                st.error(f"Error saat prediksi: {e}")
