@@ -5,6 +5,7 @@ import nltk
 import numpy as np
 import pandas as pd
 import os
+import shutil
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 import ssl
@@ -17,18 +18,53 @@ except AttributeError:
 else:
     ssl._create_default_https_context = _create_unverified_https_context
 
-# Download NLTK resources dengan path khusus
+# Setup path khusus untuk NLTK data
 nltk_data_path = os.path.join(os.getcwd(), 'nltk_data')
 os.makedirs(nltk_data_path, exist_ok=True)
 nltk.data.path.append(nltk_data_path)
 
-# Download resources yang diperlukan
-required_nltk = ['punkt', 'stopwords', 'wordnet']
-for resource in required_nltk:
-    try:
-        nltk.data.find(f'tokenizers/{resource}')
-    except LookupError:
-        nltk.download(resource, download_dir=nltk_data_path)
+# Download resources yang diperlukan dengan cara manual
+def setup_nltk():
+    # Download semua resource yang diperlukan
+    resources = {
+        'punkt': 'tokenizers/punkt',
+        'stopwords': 'corpora/stopwords',
+        'wordnet': 'corpora/wordnet',
+    }
+    
+    for resource_name, resource_path in resources.items():
+        target_path = os.path.join(nltk_data_path, resource_path)
+        if not os.path.exists(target_path):
+            try:
+                print(f"Downloading {resource_name} resource...")
+                nltk.download(resource_name, download_dir=nltk_data_path)
+                
+                # Jika download berhasil tapi folder tidak terbuat, buat manual
+                if not os.path.exists(target_path):
+                    os.makedirs(target_path)
+                    print(f"Created missing directory: {target_path}")
+                
+                # Perbaiki path punkt_tab
+                if resource_name == 'punkt':
+                    punkt_tab_path = os.path.join(nltk_data_path, 'tokenizers/punkt_tab')
+                    if not os.path.exists(punkt_tab_path):
+                        os.makedirs(punkt_tab_path)
+                        print(f"Created punkt_tab directory: {punkt_tab_path}")
+                    
+                    # Salin file dari punkt ke punkt_tab
+                    for file_name in os.listdir(target_path):
+                        if file_name.endswith('.pickle'):
+                            src = os.path.join(target_path, file_name)
+                            dst = os.path.join(punkt_tab_path, file_name)
+                            shutil.copy2(src, dst)
+                            print(f"Copied {file_name} to punkt_tab")
+            except Exception as e:
+                print(f"Error downloading {resource_name}: {str(e)}")
+                st.error(f"Error setting up NLTK resources: {str(e)}")
+                st.stop()
+
+# Setup NLTK
+setup_nltk()
 
 # Dapatkan path direktori saat ini
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -188,4 +224,5 @@ st.info("""
 - Aplikasi ini menggunakan model Logistic Regression yang dioptimalkan
 - Waktu pemuatan model hanya beberapa detik
 - Hasil prediksi muncul secara instan setelah teks dimasukkan
+- Solusi khusus diterapkan untuk mengatasi masalah resource NLTK
 """)
