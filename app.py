@@ -120,29 +120,7 @@ if predict_btn and news_text.strip():
             # Tampilkan hasil utama
             st.subheader("Hasil Klasifikasi")
             st.success(f"Kategori prediksi: **{prediction}**")
-            
-            # Tampilkan probabilitas
-            prob_df = pd.DataFrame({
-                'Kategori': [st.session_state.label_encoder['id2label'][i] for i in range(len(probabilities))],
-                'Probabilitas': probabilities
-            })
-            prob_df = prob_df.sort_values('Probabilitas', ascending=False)
-            
-            # Tampilkan grafik
-            st.subheader("Probabilitas Kategori")
-            st.bar_chart(
-                prob_df.set_index('Kategori'),
-                height=400,
-                use_container_width=True
-            )
-            
-            # Tampilkan detail probabilitas
-            st.subheader("Detail Probabilitas")
-            for i, prob in enumerate(probabilities):
-                category = st.session_state.label_encoder['id2label'][i]
-                progress = int(prob * 100)
-                st.markdown(f"**{category}**")
-                st.progress(progress, f"{progress}%")
+        
             
         except Exception as e:
             st.error(f"Terjadi kesalahan saat prediksi: {str(e)}")
