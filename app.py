@@ -7,11 +7,28 @@ import pandas as pd
 import os
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
+import ssl
 
-# Download NLTK resources
-nltk.download('stopwords')
-nltk.download('wordnet')
-nltk.download('punkt')
+# Setup untuk mengatasi SSL certificate error
+try:
+    _create_unverified_https_context = ssl._create_unverified_context
+except AttributeError:
+    pass
+else:
+    ssl._create_default_https_context = _create_unverified_https_context
+
+# Download NLTK resources dengan path khusus
+nltk_data_path = os.path.join(os.getcwd(), 'nltk_data')
+os.makedirs(nltk_data_path, exist_ok=True)
+nltk.data.path.append(nltk_data_path)
+
+# Download resources yang diperlukan
+required_nltk = ['punkt', 'stopwords', 'wordnet']
+for resource in required_nltk:
+    try:
+        nltk.data.find(f'tokenizers/{resource}')
+    except LookupError:
+        nltk.download(resource, download_dir=nltk_data_path)
 
 # Dapatkan path direktori saat ini
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -88,7 +105,8 @@ Model dapat memprediksi 5 kategori: POLITICS, ENTERTAINMENT, SPORTS, STYLE & BEA
 news_text = st.text_area(
     label="Masukkan teks berita:",
     placeholder="Contoh: The president announced new economic policies today...",
-    height=150
+    height=150,
+    key="news_input"
 )
 
 # Tombol prediksi
@@ -142,11 +160,8 @@ if predict_btn and news_text.strip():
             for i, prob in enumerate(probabilities):
                 category = st.session_state.label_encoder['id2label'][i]
                 progress = int(prob * 100)
-                col1, col2 = st.columns([2, 5])
-                with col1:
-                    st.markdown(f"**{category}**")
-                with col2:
-                    st.progress(progress, f"{progress}%")
+                st.markdown(f"**{category}**")
+                st.progress(progress, f"{progress}%")
             
         except Exception as e:
             st.error(f"Terjadi kesalahan saat prediksi: {str(e)}")
